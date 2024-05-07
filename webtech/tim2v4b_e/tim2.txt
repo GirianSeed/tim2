@@ -1,0 +1,815 @@
+TIM2 - PlayStation2 2D Graphics - File Format Specification
+                                                         [CONFIDENTIAL]
+-----------------------------------------------------------------------
+                                                               99/12/02
+                                                   web technology Corp.
+TIM2 format specification ver.4
+
+1. Introduction
+    This document explains about a 2D image format 'TIM2' for PlayStation 2 (collectively PS2).
+
+    TIM2 format is specified by web technology Corp., as a 2D image format for PS2.
+    We wish this TIM2 format is well utilized as a standard 2D image format for PS2
+    by Developers and Tool vendors of PS2 software.
+
+    No limitation in utilizing TIM2 format by authorized Developers and Tool vendors
+    of PS2. No royalty fee requested.
+
+    However, TIM2 format includes technical information of PS2, so disclosure
+    of TIM2 format and related programs to other than authorized Developers and
+    Tool vendors is prohibited.
+
+    TIM2 format is still preliminary. Please be aware of further enhancements
+    in case of developing programs according to this document.
+
+    This specification is 'AS-IS', no warranty in any case by web technology Corp.
+
+     * All of PlayStation, PlayStation2, EmotionEngine, GraphicsSynthesizer are
+       registered trademark of Sony Computer Entertainment Inc..
+
+
+2. Outline
+    TIM2 is a data format for PS2 program. It requests alignment of data
+    structure for EmotionEngine (collectively EE) and GraphicsSynthesizer (collectively GS).
+    All data is aligned to 16 or 128 byte boundary so that the DMA of EE can be
+    used directly. Also, pixel data is held in directly transferable format
+    to GS local memory as long as possible.
+
+    An extension of an image file in TIM2 format, should be '.TIM2' or '.tim2'.
+
+    Many type of information can be stored into a TIM2 format file. However, 
+    not all of them are requested. You can choice only required portion
+    of the format.
+    
+    TIM2 format is in following structure:
+         +---------------+
+         |  File Header  |
+         +---------------+
+         |  Picture Data |
+         +---------------+
+         |               |
+                ...
+         |               |
+         +---------------+
+         |  Picture Data |
+         +---------------+
+
+    - There is a 16 bytes long (fixed) file header followed by any number of picture data.
+    - Number of picture data is stored in the file header.
+    - Each of picture data is aligned to 16 or 128 byte boundary from the top of the file.
+    - Alignment size (16 bytes or 128 bytes) is specified by the file header.
+
+    Each picture data is in following structure:
+
+         +---------------+
+         | Picture Header|
+         +---------------+
+         | MIPMAP Header |
+         +---------------+
+         | User Space    |
+         +---------------+
+         | Image Data    |
+         +---------------+
+         | CLUT Data     |
+         +---------------+
+
+    - Picture header is 48 bytes long (fixed).
+    - Size of MIPMAP header can be calculated from the number of MIPMAP texture
+    - which is stored in the picture header.
+    - Amount of the picture header, MIPMAP header and user space, is stored in the picture header.
+      User space size can be calculated from above values.
+    - Size of image data and CLUT data is stored in the picture header.
+    - MIPMAP header, user space or CLUT data are optional. May not exist.
+    - Image data and top of CLUT data are aligned to 16 or 128 byte boundary.
+      If image data contains multiple MIPMAP textures, second and following
+      textures are aligned to 16 byte boundary.
+
+
+3. Detail of format
+    Actual size of all C-types such as char or short, is applied by ee-gcc ones.
+    Byte order in the TIM2 format, is little endian, just same as EE.
+
+        +-----------+------------------+
+        | type      | size(in bytes)   |
+        +-----------+------------------+
+        | char      |      1           |
+        | short     |      2           |
+        | int       |      4           |
+        | long      |      8           |
+        | u_long128 |     16           |
+        +-----------+------------------+
+
+3.1 File Header
+    File header is placed at the very top of a TIM2 file, only 1 per 1 file.
+    It is 16 bytes long (fixed), in following structure:
+
+    +----------+-------+---------------+-------------------------------+
+    | Offset   | Size  | Member Name   | Purpose                       |
+    +----------+-------+---------------+-------------------------------+
+    | +0       | 4     | FileId        | ID of the file                |
+    | +4       | 1     | FormatVersion | Version number of the format  |
+    | +5       | 1     | FormatId      | ID of the format              |
+    | +6       | 2     | Pictures      | Number of picture data        |
+    | +8       | 8     | Reserved      | Padding                       |
+    +----------+-------+---------------+-------------------------------+
+
+    typedef struct tagTIM2_FILEHEADER {
+            char    FileId[4];      // ID of the File (must be 'T', 'I', 'M' and '2')
+            u_char  FormatVersion;  // Version number of the format
+            u_char  FormatId;       // ID of the format
+            u_short Pictures;       // Number of picture data
+            char    Reserved[8];    // Padding (must be 0x00)
+    } TIM2_FILEHEADER;
+
+    Description of members
+    char FileId[4];
+        4 characters to identify the file as TIM2. Store T,I,M,2 in the order.
+    u_char FormatVersion;
+        Version number of the TIM2 format. One of a following value.
+
+    +----------------+-------------------------------------------------+
+    | Version number | Purpose                                         |
+    +----------------+-------------------------------------------------+
+    | 0x00..0x7F     | Reserved. Cannot be defined by the user.        |
+    +----------------+-------------------------------------------------+
+    | 0x80..0xBF     | 'Private' version number. This type of format   |
+    |                | introduces non-standard (and incompatible)      |
+    |                | enhancements. Cannot be loaded by the 'official'|
+    |                | tools.                                          |
+    +----------------+-------------------------------------------------+
+    | 0xC0..0xFF     | Private version number. This type of format     |
+    |                | introduces 'compatible' enhancements.           |
+    |                | Can be loaded by the 'official' tools.          |
+    +----------------+-------------------------------------------------+
+
+    Version number of the format specified by this document is '0x04'.
+
+    u_char FormatId;
+        ID of the TIM2 format. The value is one of '0x00' and '0x01'. It specifies
+        the alignment size in the file.
+
+        +--------------+--------------------------------+
+        | ID of format | Purpose                        |
+        +--------------+--------------------------------+
+        | 0x00         |  16 byte alignment             |
+        | 0x01         | 128 byte alignment             |
+        +--------------+--------------------------------+
+
+        Performance of the DMA in EE will be the best if top address to transfer is 
+        aligned to 8QWORD (128 byte). In 128 byte alignment mode, top address
+        of picture data, image data and CLUT data will be aligned to 128 byte
+        boundary. For example, in 128 byte alignment mode, 112 bytes padding will
+        be placed after 16 byte of the file header, just before the first picture header.
+
+    u_short Pictures;
+        Contains the number of picture data in this TIM2 file.
+
+    char  Reserved[8];
+        Padding. Must be 8 0x00s. Placed to align the header size to 16 bytes.
+
+
+3.2 Picture Header
+    Top of the Picture Header is aligned to 16 or 128 byte boundary. Picture Header 
+    is 48 bytes long (fixed). Its fields are defined as following:
+
+    +-----------+-------+---------------+----------------------------------------------+
+    | Offset    | Size  | Member Name   | Purpose                                      |
+    +-----------+-------+---------------+----------------------------------------------+
+    |     +0    |  4    | TotalSize     | Total size of the picture data in bytes      |
+    |     +4    |  4    | ClutSize      | CLUT data size in bytes                      |
+    |     +8    |  4    | ImageSize     | Image data size in bytes                     |
+    |    +12    |  2    | HeaderSize    | Header size in bytes                         |
+    |    +14    |  2    | ClutColors    | Total color number in CLUT data              |
+    |    +16    |  1    | PictFormat    | ID of the picture format                     |
+    |    +17    |  1    | MipMapTextures| Number of MIPAMP texture                     |
+    |    +18    |  1    | ClutType      | Type of the CLUT data                        |
+    |    +19    |  1    | ImageType     | Type of the image data                       |
+    |    +20    |  2    | ImageWidth    | Width of the picture                         |
+    |    +22    |  2    | ImageHeight   | Height of the picture                        |
+    |    +24    |  8    | GsTex0        | Data for GS TEX0 register                    |
+    |    +32    |  8    | GsTex1        | Data for GS TEX1 register                    |
+    |    +40    |  4    | GsTexaFbaPabe | Data for GS TEXA, FBA, PABE register         |
+    |    +44    |  4    | GsTexClut     | Data for GS TEXCLUT register                 |
+    +-----------+-------+---------------+----------------------------------------------+
+
+      typedef struct tagTIM2_PICTUREHEADER {
+              u_int   TotalSize;      // Total size of the picture data in bytes
+              u_int   ClutSize;       // CLUT data size in bytes
+              u_int   ImageSize;      // Image data size in bytes
+              u_short HeaderSize;     // Header size in bytes
+              u_short ClutColors;     // Total color number in CLUT data
+              u_char  PictFormat;     // ID of the picture format (must be 0)
+              u_char  MipMapTextures; // Number of MIPMAP texture
+              u_char  ClutType;       // Type of the CLUT data
+              u_char  ImageType;      // Type of the Image data
+              u_short ImageWidth;     // Width of the picture
+              u_short ImageHeight;    // Height of the picture
+              u_long  GsTex0;         // Data for GS TEX0 register
+              u_long  GsTex1;         // Data for GS TEX1 register
+              u_int   GsRegs;         // Data for GS TEXA, FBA, PABE register
+              u_int   GsTexClut;      // Data for GS TEXCLUT register
+      } TIM2_PICTUREHEADER;
+
+    Description of members
+    
+    u_int TotalSize;
+        Contains the total bytes of the whole picture data. To be aligned, it must be a multiple
+        of 16 or 128. TotalSize is a sum of ClutSize, ImageSize, and HeaderSize.        
+
+    u_int ClutSize;
+        Contains the byte size of a CLUT data. To be aligned, it must be a multiple of 16 or 128.
+
+    u_int   ImageSize;
+        Contains the byte size of an image data. To be aligned, it must be a multiple of 16 or 128.
+        If two or more MIPMAP textures contained, this member will be a sum of each MIPMAP texture
+        data sizes which are contained in the MIPMAP header (described below).
+
+    u_short HeaderSize;
+        Contains the byte size of the header parts. To be aligned, it must be a multiple of 16 or 128.
+        This member will be a sum of the Picture Header, MIPMAP header, and user space area (needs
+        to be adjusted for alignment).
+
+    u_short ClutColors;
+        Contains the color number used in the CLUT data. This is an actual number of colors,
+        not in bit depth or CLUT byte size. If the pixel format defined by ImageType member is TIM2_IDTEX4,
+        this member must be a multiple of 16. If the pixel format is TIM2_IDTEX8, must be a multiple
+        of 256. 
+        This member also have to be a multiple of 32, in case of 16 colors (ImageType = TIM2_IDTEX4),
+        CSM1 compounded mode (assumed by ClutType member).
+
+    u_char  PictFormat;
+        Defines the type of picture format. Must be 0 in this version.
+
+    u_char  MipMapTextures;
+        Shows the number of MIPMAP texture. If the picture has only LV0 texture,
+        this value will be 0x01. If the picture has all textures thru LV6, this
+        value will be 0x07.
+        If the picture has only LV0 texture, user space is placed just after
+        the picture header. If the picture has 2 or more MIPMAP textures, MIPMAP header
+        is placed after the picture header.
+        If the picture has no texture image (picture has CLUT only), this member
+        will be 0x00. Please refer "CLUT2 format" documentation for details.
+        If the file is a TIM2 file (known by FileId member of the file header), it
+        is guaranteed that MipMapTextures of at least first picture is not 0x00.
+
+    u_char  ClutType;
+        Contains the CLUT data storage mode and the pixel format. Defined as following:
+
+        +-------+------------------------------------------------------+
+        | Bit   | Purpose                                              |
+        +-------+------------------------------------------------------+
+        |    7  | CLUT storage mode (0=CSM1, 1=CSM2)                   |
+        +-------+------------------------------------------------------+
+        |    6  | CLUT data compound flag                              |
+        |       | (valid only CSM1, 16 colors mode)                    |
+        +-------+------------------------------------------------------+
+        | 5..0  | Shows the pixel format of CLUT data.                 |
+        |       | 0= No CLUT (TIM2_NONE)                               |
+        |       | 1= 16bit Color (TIM2_RGB16)                          |
+        |       | 2= 24bit Color (TIM2_RGB24)                          |
+        |       | 3= 32bit Color (TIM2_RGB32)                          |
+        +-------+------------------------------------------------------+
+
+        Bit 7 shows CLUT storage mode. If it is CSM1 and 16 colors mode, 
+        Bit 6 is also valid to assume data order. Format of the CLUT data part
+        is defined by combination of these ClutType and ImageType members.
+        Please refer "4.4 Format of CLUT data part" and "4.5 Pixel order of CLUT data"
+        for details.
+
+        Caution: value of this member is not directly related with an actual
+        value to be set into GS registers for the pixel format.
+
+    u_char  ImageType;
+
+        Shows the pixel format of the image data. One of the following value.
+        +-------+------------------------------------------------------+
+        | Bit   | Purpose                                              |
+        +-------+------------------------------------------------------+
+        | 7..0  | Pixel format of the image data                       |
+        |       | 0x01= 16bit Color (TIM2_RGB16)                       |
+        |       | 0x02= 24bit Color (TIM2_RGB24)                       |
+        |       | 0x03= 32bit Color (TIM2_RGB32)                       |
+        |       | 0x04= 4bit Texture (TIM2_IDTEX4)                     |
+        |       | 0x05= 8bit Texture (TIM2_IDTEX8)                     |
+        +-------+------------------------------------------------------+
+
+        Caution: value of this member is not directly related with an actual
+        value to be set into GS registers for the pixel format.
+
+    u_short ImageWidth;
+        Contains the width of picture. No need to be a power of 2. However,
+        width of the highest level MIPMAP texture must be an integer.
+        On the other hand, if index colors are used as a pixel format (in case of
+        TIM2_IDTEX8 or TIM2_DTEX4), width of a texture must be a multiple of
+        2 or 4. So restriction about width of a picture and number of MIPMAP texture
+        can be summarized as following.
+
+        +------------------+------------------+------------------------+
+        | Number of MIPMAP | Pixel Format     | Restriction of         |
+        | Texture          |                  | ImageWidth member      |
+        +------------------+------------------+------------------------+
+        |                  | TIM2_RGB32,24,16 | None                   |
+        |                  +------------------+------------------------+
+        |  LV0 only        | TIM2_IDTEX8      | Multiple of 2          |
+        |                  +------------------+------------------------+
+        |                  | TIM2_IDTEX4      | Multiple of 4          |
+        +------------------+------------------+------------------------+
+        |                  | TIM2_RGB32,24,16 | Multiple of 2          |
+        |                  +------------------+------------------------+
+        | LV0 and LV1      | TIM2_IDTEX8      | Multiple of 4          |
+        |                  +------------------+------------------------+
+        |                  | TIM2_IDTEX4      | Multiple of 8          |
+        +------------------+------------------+------------------------+
+        |                  | TIM2_RGB32,24,16 | Multiple of 4          |
+        |                  +------------------+------------------------+
+        | LV0 thru LV2     | TIM2_IDTEX8      | Multiple of 8          |
+        |                  +------------------+------------------------+
+        |                  | TIM2_IDTEX4      | Multiple of 16         |
+        +------------------+------------------+------------------------+
+        |                  | TIM2_RGB32,24,16 | Multiple of 8          |
+        |                  +------------------+------------------------+
+        | LV0 thru LV3     | TIM2_IDTEX8      | Multiple of 16         |
+        |                  +------------------+------------------------+
+        |                  | TIM2_IDTEX4      | Multiple of 32         |
+        +------------------+------------------+------------------------+
+        |                  | TIM2_RGB32,24,16 | Multiple of 16         |
+        |                  +------------------+------------------------+
+        | LV0 thru LV4     | TIM2_IDTEX8      | Multiple of 32         |
+        |                  +------------------+------------------------+
+        |                  | TIM2_IDTEX4      | Multiple of 64         |
+        +------------------+------------------+------------------------+
+        |                  | TIM2_RGB32,24,16 | Multiple of 32         |
+        |                  +------------------+------------------------+
+        | LV0 thru LV5     | TIM2_IDTEX8      | Multiple of 64         |
+        |                  +------------------+------------------------+
+        |                  | TIM2_IDTEX4      | Multiple of 128        |
+        +------------------+------------------+------------------------+
+        |                  | TIM2_RGB32,24,16 | Multiple of 64         |
+        |                  +------------------+------------------------+
+        | LV0 thru LV6     | TIM2_IDTEX8      | Multiple of 128        |
+        |                  +------------------+------------------------+
+        |                  | TIM2_IDTEX4      | Multiple of 256        |
+        +------------------+------------------+------------------------+
+
+    u_short ImageHeight;
+        Contains the height of the picture. No need to be a power of 2.
+
+    u_long  GsTex0;
+        Contains the raw data to be stored into TEX0 register of GS.
+
+        +--------+-------------+----------------------------------------+
+        | Bit    | Field Name  | Purpose                                |
+        +--------+-------------+----------------------------------------+
+        | 63..61 |     CLD     | CLUT buffer load control               |
+        | 60..56 |     CSA     | CLUT entry offset                      |
+        |   55   |     CSM     | CLUT storage mode                      |
+        | 54..51 |    CPSM     | CLUT pixel storage format              |
+        | 50..37 |     CBP     | CLUT buffer base point                 |
+        | 36..35 |     TFX     | Texture function                       |
+        |   34   |     TCC     | Texture color component                |
+        | 33..30 |     TH      | Texture Height                         |
+        | 29..26 |     TW      | Texture width                          |
+        | 25..20 |     PSM     | Texture pixel storage format           |
+        | 19..14 |     TBW     | Texture buffer width                   |
+        | 13.. 0 |    TBP0     | Texture base point                     |
+        +--------+-------------+----------------------------------------+
+
+    u_long  GsTex1;
+        Contains the raw data to be stored into TEX1 register of GS.
+
+        +--------+-------------+---------------------------------------+
+        | Bit    | Field Name  | Purpose                               |
+        +--------+-------------+---------------------------------------+
+        | 63..44 |             | Reserved (must be 0)                  |
+        | 43..32 |      K      | LOD Parameter value K                 |
+        | 31..21 |             | Reserved (must be 0)                  |
+        | 20..19 |      L      | LOD Parameter value L                 |
+        | 18..10 |             | Reserved (must be 0)                  |
+        |    9   |    MTBA     | Specification of MIPMAP texture       |
+        |        |             | base address of Level 1 or more       |
+        |  8.. 6 |    MMIN     | Filter when texture is reduced        |
+        |    5   |    MMAG     | Filter when texture is expanded       |
+        |  4.. 2 |     MXL     | Maximum MIP level                     |
+        |    1   |             | Reserved (must be 0)                  |
+        |    0   |     LCM     | LOD Calculation method                |
+        +--------+-------------+---------------------------------------+
+
+    u_int   GsTexaFbaPabe;
+        Holds data to be stored in TEXA, FBA and PABE registers of GS in
+        bitmapped formula.
+
+        +--------+-------------+---------------------------------------+
+        | Bit    | Field Name  | Purpose                               |
+        +--------+-------------+---------------------------------------+
+        |   31   |     FBA     | FBA bit of FBA_1 and FBA_2 registers  |
+        |   30   |    PABE     | PABE bit of PABE register             |
+        | 29..24 |             | Reserved (Must be 0)                  |
+        | 23..16 |     TA1     | TAI field of TEXA register            |
+        |   15   |     AEM     | AEM bit of TEXA register              |
+        | 14.. 8 |             | Reserved (Must be 0)                  |
+        |  7.. 0 |     TA0     | TA0 field of TEXA register            |
+        +--------+-------------+---------------------------------------+
+
+    u_int   GsTexClut;
+        Holds lower 32 bit data to be set into TEXCLUT register of GS.
+        Only valid when ClutType member shows that CLUT storage mode is CSM2.
+
+        +--------+-------------+---------------------------------------+
+        | Bit    | Field Name  | Purpose                               |
+        +--------+-------------+---------------------------------------+
+        | 31..22 |             | Reserved (Must be 0)                  |
+        | 21..12 |    COV      | CLUT offset V                         |
+        | 11.. 6 |    COU      | CLUT offset U                         |
+        |  5.. 0 |    CBW      | CLUT buffer width                     |
+        +--------+-------------+---------------------------------------+
+
+3.3 MIPMAP header
+    MIPMAP header exists only when 2 or more MIPMAP textures (shown by MipMapTextures member of
+    the picture header) exist. If only one MIPMAP texture exists, no MIPMAP header placed.
+    User space directly follows after the picture header.
+
+    When n of MIPAMP texture exist, MIPMAP header will be as following:
+
+    typedef struct tagTIM2_MIPMAPHEADER {
+            u_long  GsMiptbp1;      // Value to be stored into MIPTBP1 register of GS
+            u_long  GsMiptbp2;      // Value to be stored into MIPTBP2 register of GS
+            u_int   Size[n];        // Array that shows the byte size of each texture
+    } TIM2_MIPMAPHEADER;
+
+    MIPMAP header has variable size. To be aligned to 16 byte boundary, some padding
+    might be added. Relations between the number of MIPMAP texture, MIPMAP header size and padding
+    size are as following:
+
+        +---------------+--------------------+-------------------------+
+        | MIPMAP number | MIPMAP header Size | Padding Size            |
+        +---------------+--------------------+-------------------------+
+        | 1             |  0 Byte            |                         |
+        | 2             | 32 Bytes           |  8 Bytes                |
+        | 3             | 32 Bytes           |  4 Bytes                |
+        | 4             | 32 Bytes           |  0 Byte                 |
+        | 5             | 48 Bytes           | 12 Bytes                |
+        | 6             | 48 Bytes           |  8 Bytes                |
+        | 7             | 48 Bytes           |  4 Bytes                |
+        +---------------+--------------------+-------------------------+
+
+Description of members:
+    u_long  GsMiptbp1;
+        Contains the value to be stored into MIPTBP1 register of GS in direct form.
+
+        +--------+-----------------------------------------------------+
+        | Bit    | Field Name | Purpose                                |
+        +--------+-----------------------------------------------------+
+        | 63..60 |            | Reserved (Must be 0)                   |
+        | 59..54 |    TBW3    | MIPMAP Level 3 texture buffer width    |
+        | 53..40 |    TBP3    | MIPMAP Level 3 texture base point      |
+        | 39..34 |    TBW2    | MIPMAP Level 2 texture buffer width    |
+        | 33..20 |    TBP2    | MIPMAP Level 2 texture base point      |
+        | 19..14 |    TBW1    | MIPMAP Level 1 texture buffer width    |
+        | 13.. 0 |    TBP1    | MIPMAP Level 1 texture base point      |
+        +--------+-----------------------------------------------------+
+
+    u_long  GsMiptbp2;
+        Contains the value to be stored into MIPTBP2 register of GS in direct form.
+
+        +--------+------------+----------------------------------------+
+        | Bit    | Field Name | Purpose                                |
+        +--------+------------+----------------------------------------+
+        | 63..60 |            | Reserved (Must be 0)                   |
+        | 59..54 |    TBW6    | MIPMAP Level 6 texture buffer width    |
+        | 53..40 |    TBP6    | MIPMAP Level 6 texture base point      |
+        | 39..34 |    TBW5    | MIPMAP Level 5 texture buffer width    |
+        | 33..20 |    TBP5    | MIPMAP Level 5 texture base point      |
+        | 19..14 |    TBW4    | MIPMAP Level 4 texture buffer width    |
+        | 13.. 0 |    TBP4    | MIPMAP Level 4 texture base point      |
+        +--------+------------+----------------------------------------+
+
+    u_int   Size[n];
+        Contains the size of each MIPMAP texture. Number of elements
+        is equal to the number of MIPMAP textures which is shown by MipMapTextures
+        member of the picture header.
+        Top of elements shows the size of LV0 texture, and sum of all array elements
+        is equal to the image data size which is shown by ImageSize member of picture header.
+        Tops of all MIPMAP textures must be aligned to 16 byte boundary, so
+        each element of the array must be a multiple of 16.
+
+3.4 User Space
+    User space is a variable-length data area, and the purpose is not predefined.
+    So can be used freely.
+    User space is placed just after a MIPMAP header or a picture header. Size of
+    the user space can be calculated by subtracting picture header size (48 bytes
+    fixed) and MIPMAP header size (depend on number of MIPMAP texture) from
+    the total header size (shown by HeaderSize member of the picture header).
+    
+    Caution: It depends on the implementation of TIM2 management tools if the information
+    in user space is kept or not on editing. In general, management tools are recommended
+    to save the user space data. Because of 16 or 128 byte alignment, HeaderSize member of
+    the picture header (this reflects the size of the user space) may increase unexpectedly 
+    during repeated saving of a file, far exceed actually available information size in the user space.
+    This problem can be avoided by using an extended header, described in '4.7 Extended Header'.
+    It is recommended to use an extended header to show the available size of the user space.
+
+    When no user space is used, recommended usage of an extended header is different
+    between alignment modes. In 16 byte alignment mode, HeaderSize member of
+    picture header should be adjusted to show the size of user space is 0.
+    In 128 byte alignment mode, add extended header that shows the size of
+    available user space is 0.
+
+3.5 Image Data
+    In an image data part, texture data is contained in directly transferable format to GS
+    local memory. Image data type is defined by ImageType member of the picture header.
+    Top of image data is aligned to 16 or 128 byte boundary. If 2 or more MIPMAP textures
+    are contained, top of each MIPMAP texture is aligned to 16 byte boundary.
+
+
+3.6 CLUT data
+    Format of CLUT data and pixel order, are defined by combination of ClutType
+    and ImageType member of the picture header. Please refer "4.4 Format assignment of CLUT data"
+    and "4.5 Pixel order of CLUT data" for details.
+    Top of CLUT data is aligned to 16 or 128 byte boundary.
+
+    CLUT data format MIGHT NOT be directly transferable to GS local memory.
+    For example, if CLUT storage mode is CSM2, GS doesn't accept PSMCT32 pixel format.
+    So conversion (about pixel order or so) might be requested in transferring to GS local memory.
+
+
+4. Others
+4.1 Basic rule about alignment
+    All members in header about some 'size' should be adjusted by alignment size.
+    This means that a program handling TIM2 format, doesn't need to adjust the sizes
+    to calculate the reference address, All adjustment for alignment are done when TIM2 data
+    is created.
+
+4.2 Basic rule about padding and reserved area
+
+    Padding bytes filled to keep alignment, and reserved members of structures
+    should be all 0x00. This is for further compatibility.
+
+4.3 Basic rule about GS registers
+    All members in picture header or MIPMAP header which is related to registers of GS
+    can not conflict with other settings shown by other members.
+
+4.4 Format assignment of CLUT data
+    Pixel format and order of pixel are defined by combination of ClutType and ImageType
+    in the picture header, as following. All valid combinations are shown. Other combination
+    is invalid.
+
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | ImageType   | ClutType        | Pixel Format of    | CLUT storage mode  |  CLUT color    |
+    |             |                 | CLUT data          | and pixel order    |  number        |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | TIM2_RGB16  | TIM2_NONE       |  None              | None               |  None          |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | TIM2_RGB24  | TIM2_NONE       |  None              | None               |  None          |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | TIM2_RGB32  | TIM2_NONE       |  None              | None               |  None          |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | TIM2_IDTEX4 | TIM2_RGB16      |  16 Colors,        | CSM1, sequential   |  n x 16 colors |
+    |             |                 |  16 bits per pixel |                    |                |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | TIM2_IDTEX4 | TIM2_RGB24      |  16 Colors,        | CSM1, sequential   |  n x 16 colors |
+    |             |                 |  24 bits per pixel |                    |                |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | TIM2_IDTEX4 | TIM2_RGB32      |  16 Colors,        | CSM1, sequential   |  n x 16 colors |
+    |             |                 |  32 bits per pixel |                    |                |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | TIM2_IDTEX4 | TIM2_RGB16|0x40 |  16 Colors,        | CSM1, compound     |  n x 32 colors |
+    |             |                 |  16 bits per pixel |                    |                |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | TIM2_IDTEX4 | TIM2_RGB24|0x40 |  16 Colors,        | CSM1, compound     |  n x 32 colors |
+    |             |                 |  24 bits per pixel |                    |                |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | TIM2_IDTEX4 | TIM2_RGB32|0x40 |  16 Colors,        | CSM1, compound     |  n x 32 colors |
+    |             |                 |  32 bits per pixel |                    |                |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | TIM2_IDTEX4 | TIM2_RGB16|0x80 |  16 Colors,        | CSM2, sequential   |  n x 16 colors |
+    |             |                 |  16 bits per pixel |                    |                |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | TIM2_IDTEX4 | TIM2_RGB24|0x80 |  16 Colors,        | CSM2, sequential   |  n x 16 colors |
+    |             |                 |  24 bits per pixel |                    |                |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | TIM2_IDTEX4 | TIM2_RGB32|0x80 |  16 Colors,        | CSM2, sequential   |  n x 16 colors |
+    |             |                 |  32 bits per pixel |                    |                |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | TIM2_IDTEX8 | TIM2_RGB16      | 256 Colors,        | CSM1, compound     | n x 256 colors |
+    |             |                 |  16 bits per pixel |                    |                |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | TIM2_IDTEX8 | TIM2_RGB24      | 256 Colors,        | CSM1, compound     | n x 256 colors |
+    |             |                 |  24 bits per pixel |                    |                |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | TIM2_IDTEX8 | TIM2_RGB32      | 256 Colors,        | CSM1, compound     | n x 256 colors |
+    |             |                 |  32 bits per pixel |                    |                |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | TIM2_IDTEX8 | TIM2_RGB16|0x80 | 256 Colors,        | CSM2, sequential   | n x 256 colors |
+    |             |                 |  16 bits per pixel |                    |                |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | TIM2_IDTEX8 | TIM2_RGB24|0x80 | 256 Colors,        | CSM2, sequential   | n x 256 colors |
+    |             |                 |  24 bits per pixel |                    |                |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+    | TIM2_IDTEX8 | TIM2_RGB32|0x80 | 256 Colors,        | CSM2, sequential   | n x 256 colors |
+    |             |                 |  32 bits per pixel |                    |                |
+    +-------------+-----------------+--------------------+--------------------+----------------+
+
+    If bit 6 of ClutType is set, CLUT color number must be a multiple of 32.
+    In this case, padding of 16 colors might be added to satisfy the request.
+
+
+4.5 Pixel order of CLUT data
+    If CLUT storage mode (shown by ClutType member of the picture header) is CSM1,
+    data order might be compounded to adjust the order of CLUT pixels in GS local memory.
+    Please refer '4.4 Format assignment of CLUT data' for the condition.
+    Please refer GS manual for CLUT storage mode.
+
+    Order of CLUT data will be as following.
+    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+    |0 |1 |2 |3 |4 |5 |6 |7 |16|17|18|19|20|21|22|23|
+    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+    |8 |9 |10|11|12|13|14|15|24|25|26|27|28|29|30|31|
+    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+    |32|33|34|35|36|37|38|39|48|49|50|51|52|53|54|55|
+    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+    |40|41|42|43|44|45|46|47|56|57|58|59|60|61|62|63|
+    +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+
+    With 256 colors CLUT, above number directly explains the color indexes.
+    With 16 colors CLUT, 0-15 means a 1st set index, and 16-31 means a 2nd set index.
+    In this case, minimum element is 2 sets of indexes, so color numbers in CLUT
+    must be a multiple of 32.
+
+    If a CLUT pixel format is RGB16, 16-31 bytes and 32-47 byes are swapped
+    in each 64 bytes. If it is RGB24, 24-47 bytes and 48-71 bytes are swapped
+    in each 96 bytes. If it is RGB32, 32-63 bytes and 64-95 bytes are swapped
+    in each 128 bytes.
+
+
+4.6 Format of Image Data
+    In an image data part, pixel data is stored in directly transferable format
+    to GS local memory. Please refer GS manual for details.
+
+    Image Data for TIM2_RGB32
+        1 pixel is described by 32 bits. All of R, G, B and A elements have
+        8 bits width.
+        bit63              bit32             bit0
+        +----+----+----+----+----+----+----+----+
+        |A1  |B1  |G1  |R1  |A0  |B0  |G0  |R0  |
+        +----+----+----+----+----+----+----+----+
+        |A3  |B3  |G3  |R3  |A2  |B2  |G2  |R2  |
+        +----+----+----+----+----+----+----+----+
+                           ...
+                           ...
+
+    Image Data for TIM2_RGB24
+         1 pixel is described by 24 bits. All of R, G and B elements have 8 bits width.
+        bit63             bit32              bit0
+        +----+----+----+----+----+----+----+----+
+        |G2  |R2  |B1  |G1  |R1  |B0  |G0  |R0  |
+        +----+----+----+----+----+----+----+----+
+        |R5  |B4  |G4  |R4  |B3  |G3  |R3  |B2  |
+        +----+----+----+----+----+----+----+----+
+        |B7  |G7  |R7  |B6  |G6  |R6  |B5  |G5  |
+        +----+----+----+----+----+----+----+----+
+                           ...
+                           ...
+
+
+    Image Data for TIM2_RGB16
+        1 pixel is described by 16 bits. All of R, G and B elements have 5 bits width, and
+        A has 1 bit width.
+        bit63              bit32              bit0
+        +----+----+----+----+----+----+----+----+
+        | RGBA3   | RGBA2   | RGBA1   | RGBA0   |
+        +----+----+----+----+----+----+----+----+
+        | RGBA7   | RGBA6   | RGBA5   | RGBA4   |
+        +----+----+----+----+----+----+----+----+
+                           ...
+                           ...
+
+    Image Data for TIM2_IDTEX8
+        1 texel is described by 8 bits. All elements represent index numbers in CLUT.
+        bit63              bit32             bit0
+        +----+----+----+----+----+----+----+----+
+        |T7  |T6  |T5  |T4  |T3  |T2  |T1  |T0  |
+        +----+----+----+----+----+----+----+----+
+        |T15 |T14 |T13 |T12 |T11 |T10 |T9  |T8  |
+        +----+----+----+----+----+----+----+----+
+                           ...
+                           ...
+
+    Image Data for TIM2_IDTEX4
+        1 texel is described by 4 bits. All elements represent index numbers in CLUT.
+        bit63               bit32                    bit0
+        +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+        |T |T |T |T |T |T |T |T |T |T |T |T |T |T |T |T |
+        |1 |1 |1 |1 |1 |1 |9 |8 |7 |6 |5 |4 |3 |2 |1 |0 |
+        |5 |4 |3 |2 |1 |0 |  |  |  |  |  |  |  |  |  |  |
+        +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+        |T |T |T |T |T |T |T |T |T |T |T |T |T |T |T |T |
+        |3 |3 |2 |2 |2 |2 |2 |2 |2 |2 |2 |2 |1 |1 |1 |1 |
+        |1 |0 |9 |8 |7 |6 |5 |4 |3 |2 |1 |0 |9 |8 |7 |6 |
+        +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+                            ...
+                            ...
+
+4.7 Extended Header
+    Extended header is a recommended specification of the use of a user space.
+    Using extended header makes it possible to save a string comment per picture.
+    It also helps to avoid unexpected increase of the user space size by padding for alignment.
+
+    It is recommended to use an extended header when user space is used, even if 
+    string comment is not used. Because it helps to show the valid user space size.
+    In 128 byte alignment mode, use of extended header is recommended if there is
+    no user data nor comment string. In such case, padding will be added after
+    MIPMAP header for the alignment. So use of extended header won't suffer the size of a file.
+
+    When an extended header is used, user space can be partitioned as following:
+
+                +-----------------+
+                | Extended header |
+                +-----------------+
+                | User data       |
+                +-----------------+
+                | Comment string  |
+                +-----------------+
+
+    User data and comment string may not exist.
+
+
+Extended header
+    Extended header is placed at the top of a user space. The size of the header
+    is 16 bytes fixed, and has following structure:
+
+    +----------+------+---------------+-----------------------------------------------+
+    | Offset   | Size | Member Name   | Purpose                                       |
+    +----------+------+---------------+-----------------------------------------------+
+    |+0        |4     | ExHeaderId    | ID of Extended header ('e', 'X', 't', '\x00') |
+    +----------+------+---------------+-----------------------------------------------+
+    |+4        |4     | UserSpaceSize | Total size of the user space                  |
+    +----------+------+---------------+-----------------------------------------------+
+    |+8        |4     | UserDataSize  | Size of the user data                         |
+    +----------+------+---------------+-----------------------------------------------+
+    |+12       |4     | Reserved      | Reserved                                      |
+    +----------+------+---------------+-----------------------------------------------+
+
+    typedef struct tagTIM2_EXHEADER {
+            char    ExHeaderId[4];  // ID of Extended header
+                                    // Must be ('e', 'X', 't', '\x00')
+            u_int   UserSpaceSize;  // Total size of the user space
+            u_int   UserDataSize;   // Size of the user data
+                                    // (Pointer to the string comment)
+            u_int   Reserved;       // Reserved (must be 0x00000000)
+    } TIM2_EXHEADER;
+
+    Description of members
+    char    ExHeaderId[4];
+        4 bytes string to identify an extended header in the user space.
+        'e', 'X', 't', '\x00' will be stored in the order.
+
+    u_int   UserSpaceSize;
+        Contains the total bytes of the user space. This value includes the size of
+        extended header itself, which is 16 bytes.
+        UserSpaceSize might be different from the result of calculation 
+        (HeaderSize - (size of the picture header) - (size of the MIPMAP header)).
+        This value shows a 'valid' size of the user space w/o the size of padding.
+
+    u_int   UserDataSize;
+        Contains the size of a user data following to the extended header.
+        This member also means the offset to the comment string. For example,
+        if there is no data except extended header in the user space, this value
+        will be 0x00000000.
+
+        If a sum of extended header size (16 bytes) and user space size (shown by UserDataSize member)
+        is equal to the valid size of the user space (shown by UserSpaceSize member), no comment string
+        is contained in the space.
+
+    u_int   Reserved;
+        Reserved for further extension. Must be 0x00000000.
+
+    User Data
+    Just after the extended header, a user data follows whose size is shown by
+    UserDataSize member in the extended header. Data for a game program will be
+    stored in this area.
+
+    Comment String
+    Contains the comment string about the TIM2 data. The string is terminated by a single '\x00'.
+    Acceptable character set is 0x20-0x7f in ASCII. Control codes, Chinese characters, Japanese
+    half size characters cannot be used.
+
+
+4.8 About support of TIM2 format
+
+    If there is some question about this specification, please contact to
+    TIM2 support section of web technology Corp.
+
+        TIM2 support section of web technology Corp.:
+            http://www.webtech.co.jp/eng/istudio/ps2/tim2.html
+
+    This specification can be modified for enhancements. Please be aware of that
+    when using this information to create TIM2 loader, saver or such application program.
+
+4.9 History of modification
+    1999.11.18.
+    - Bit field definition of GsTex1 in picture header corrected.
+
+    1999.12.02.
+    - TH and TW of GS TEX0 register was swapped. Corrected.
+
+ [End of document]

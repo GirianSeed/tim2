@@ -1,0 +1,7 @@
+* -text
+
+*.c linguist-language=C
+*.h linguist-language=C
+
+*.tm2 binary
+*.zip binary

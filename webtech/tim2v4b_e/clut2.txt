@@ -1,0 +1,151 @@
+CLUT2 - PlayStation2 Color Look Up Table - File Format Specification
+                                                         [CONFIDENTIAL]
+-----------------------------------------------------------------------
+                                                               99/11/18
+                                                   web technology Corp.
+CLUT2 Format Specification ver.4
+
+1. Introduction
+    This document explains about 'CLUT2' which is a data format of Color Lookup Table
+    (collectively CLUT) for PlayStation 2 (collectively PS2).
+
+    CLUT2 format is specified by web technology Corp., as a CLUT format for PS2.
+    We wish this CLUT2 format is well utilized as a standard CLUT format for PS2
+    by Developers and Tool vendors of PS2 software.
+
+    No limitation in utilizing TIM2 format by authorized Developers and Tool vendors
+    of PS2. No royalty fee requested.
+
+    However, CLUT2 format includes technical information of PS2, so disclosure
+    of CLUT2 format and related programs to other than authorized Developers and
+    Tool vendors is prohibited.
+
+    CLUT2 format is still preliminary. Please be aware of further enhancements
+    in case of developing programs according to this document.
+
+    This specification is 'AS-IS', no warranty in any case by web technology Corp.
+
+    * PlayStation, PlayStation2, EmotionEngine, GraphicsSynthesizer are
+      all registered trademark of Sony Computer Entertainment Inc..
+
+
+2. Abstract
+    CLUT2 format is a format for CLUT data, using TIM2 format structure.
+    Structure of headers, and format of data area are compatible with TIM2.
+    An extension of a CLUT2 format image file, should be '.CL2' or '.cl2'.
+
+
+3. Details of the Format
+    In this section, difference between CLUT2 format and TIM2 format is described.
+    Please refer TIM2 Format specifications for other details.
+
+3.1 File Header
+    FileId member of the file header is changed to identify CLUT2 format.
+
+    Member Description
+    char    FileId[4];
+            4 characters to identify this file as CLUT2. Store C, L, T, 2 in the order.
+            Actually, data types of the pictures are defined per picture, not per file.
+            If the file is identified by this member as CLUT2 file, it is guaranteed that
+            at least the first picture data is a CLUT2 data.
+
+3.2 Picture Header
+    In the picture header, ImageSize, MipMapTextures, ImageWidth and ImageHeight
+    members are not used. 
+    Limitation about the value of ImageType is changed.
+
+    Member Description
+    u_int ImageSize;
+            ImageSzie member, which shows the byte size of image data, will be
+            always 0 in CLUT2. However for further enhancements, please skip
+            image data section by adding this value to calculate CLUT data offset,
+            just as in TIM2 format.
+    
+    u_char  MipMapTextures;
+            MipMapTextures member, which shows the number of MIPAMP textures,
+            will be always 0 in CLUT2. If FileId member of the file header shows
+            the file is CLUT2, MipMapTextures member of at least the first picture
+            is guaranteed to be 0x00.
+
+    u_char  ImageType;
+            Shows the color number of the CLUT data. Must be one of following value.
+
+            +-------+--------------------------------------------------+
+            | Bit   | Purpose                                          |
+            +-------+--------------------------------------------------+
+            | 7..0  | Shows a pixel format of the image data           |
+            |       | 0x04=4 bit texture (TIM2_IDTEX4)                 |
+            |       | 0x05=8 bit texture (TIM2_IDTEX8)                 |
+            +-------+--------------------------------------------------+
+            In CLUT2, only 0x04 (TIM2_IDTEX4) and 0x08 (TIM2_IDTEX8) are valid.
+
+    u_short ImageWidth;
+            This member must be 0 in CLUT2 data.
+    
+    u_short ImageHeight;
+            This member must be 0 in CLUT2 data.
+
+3.3 MIPMAP Header
+
+    No MIPMAP header exists. User space just follows after the picture header.
+
+3.4 User Space
+
+    User space definition is exactly same to one in TIM2. No modification exists.
+
+3.5 Image Data
+
+    No image data exists. ImageSize member of the picture header is always 0 in CLUT2 data.
+    However for further enhancements, if you need to calculate the offset to CLUT data,
+    please skip the image data part by adding ImageSize value, just as TIM2 file handling.
+
+3.6 CLUT data
+
+    CLUT data definition is exactly same to one in TIM2. No modification exists.
+
+
+4. Others
+
+4.1 Basic rule about alignment
+4.2 Basic rule about padding and reserved area
+4.3 Basic rule about GS registers
+4.4 Format assignment of CLUT data
+4.5 Pixel order of CLUT data
+
+    All above TIM2 issues are applied to CLUT2 format. No modification exists.
+
+4.6 How to identify TIM2 data and CLUT2 data
+
+    CLUT2 data uses TIM2 data structure as it is. Usually, no need to identify
+    CLUT2 data from TIM2 data. However, if required, a picture data whose
+    MipMapTexture member in the picture header is zero can be judged as a
+    CLUT2 data.
+
+    Single .TIM2 (or .tim2) or .CL2 (.cl2) file can contain both TIM2 data and CLUT2 data,
+    as long as following condition is satisfied.
+
+    * If a file extension is .TM2 or .tm2, FileId member in the file header
+    must be 'T', 'I', 'M', '2'. Additionally, first picture data must be a
+    TIM2 format data.
+
+    * If a file extension is .CL2 or .cl2, FileId member in the file header
+    must be 'C', 'L', 'T', '2'. Additionally, first picture data must be a
+    CLUT2 format data.
+
+
+4.7 About support of CLUT2 format
+
+    If there is some question about this specification, please contact to
+    TIM2 support section of web technology Corp.
+
+    TIM2 support section of web technology Corp.:
+        http://www.webtech.co.jp/eng/istudio/ps2/tim2.html
+
+    This specification can be modified for enhancements. Please be aware of that
+    when using this information to create CLUT2 loader, saver or such application program.
+    
+[End of document]
+
+
+CLUT2 - PlayStation2 Color Look Up Table  - File Format Specification [CONFIDENTIAL]
+
